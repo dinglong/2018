@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>XTable</title>
+    <script src="js/jquery.js"></script>
+    <script src="js/util.js"></script>
+</head>
+<input type="file" onchange="loadFile(event)">
+<script>
+    var loadFile = function(event) {
+        var output = document.getElementById('output');
+        alert(event.target.files[0])
+        output.src = URL.createObjectURL(event.target.files[0]);
+    };
+</script>
+</html>
