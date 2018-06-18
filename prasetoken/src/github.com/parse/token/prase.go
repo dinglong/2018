@@ -41,12 +41,6 @@ func NewToken(rawToken string) (*Token, error) {
 	t.Header = new(Header)
 	t.Claims = new(ClaimSet)
 
-	t.Raw = strings.Join(parts[:2], TokenSeparator)
-	if t.Signature, err = joseBase64UrlDecode(parts[2]); err != nil {
-		err = fmt.Errorf("unable to decode signature: %s", err)
-		return nil, err
-	}
-
 	if err = json.Unmarshal(headerJSON, t.Header); err != nil {
 		return nil, err
 	}
