@@ -1,0 +1,13 @@
+# 开启核心转发功能
+echo 1 > /proc/sys/net/ipv4/ip_forward
+
+# 开启防火墙转发
+iptables -I FORWARD -s 192.168.76.0/24 -p tcp --dport 8080 -j ACCEPT
+iptables -I FORWARD -d 192.168.76.0/24 -p tcp --sport 8080 -j ACCEPT
+
+# 开启SNAT和DNAT
+iptables -t nat -A POSTROUTING -s 192.168.76.0/24 -j SNAT --to-source 192.168.1.80
+iptables -t nat -A PREROUTING -d 192.168.1.80 -p tcp --dport 12345 -j DNAT --to-destination 192.168.76.128:8080
+
+# 到192.168.1.0/24网络地址的数据，路由到192.168.76.129
+ip route add 192.168.1.0/24 via 192.168.76.129
