@@ -3,57 +3,54 @@ package works
 import (
 	"crypto/sha256"
 	"fmt"
+	"fscans/pkg"
 	"io"
 	"os"
 	"runtime"
 	"sync"
-
-	"fscans/pkg"
 )
 
-type hashWork struct {
+type hashWorker struct {
 	maxRoutine int
-	works      chan string
+	works      chan string // works chan关闭则worker退出
 	fileHashes chan *pkg.FileHash
-	errs       chan error
 }
 
-func NewHashWork(maxRoutine int, works chan string, fileHashes chan *pkg.FileHash, errs chan error) *hashWork {
+func NewHashWorker(works chan string, fileHashes chan *pkg.FileHash, maxRoutine int) *hashWorker {
 	routines := maxRoutine
 	if routines <= 0 {
 		routines = runtime.NumCPU()
 	}
 
-	return &hashWork{
+	return &hashWorker{
 		maxRoutine: routines,
 		works:      works,
 		fileHashes: fileHashes,
-		errs:       errs,
 	}
 }
 
-func (w *hashWork) Add(p string) {
+func (w *hashWorker) Add(p string) {
 	w.works <- p
 }
 
-func (w *hashWork) Run(wait *sync.WaitGroup) {
-	defer wait.Done()
-
-	wg := sync.WaitGroup{}
-	wg.Add(w.maxRoutine)
+// Run 启动worker，从channel中读取文件进行分析
+func (w *hashWorker) Run() {
+	// 用于等待所有的工作协程退出
+	worksWait := sync.WaitGroup{}
+	worksWait.Add(w.maxRoutine)
 
 	for i := 0; i < w.maxRoutine; i++ {
 		go func() {
-			defer wg.Done()
+			defer worksWait.Done()
 			for {
-				filename, ok := <-w.works
-				if !ok {
+				filename, more := <-w.works
+				if !more {
 					return
 				}
 
 				hash, err := hashFile(filename)
 				if err != nil {
-					w.errs <- err
+					fmt.Fprintf(os.Stderr, "worker catch error %v\n", err)
 					continue
 				}
 
@@ -65,7 +62,7 @@ func (w *hashWork) Run(wait *sync.WaitGroup) {
 		}()
 	}
 
-	wg.Wait()
+	worksWait.Wait()
 }
 
 func hashFile(p string) (string, error) {

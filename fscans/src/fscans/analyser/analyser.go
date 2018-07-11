@@ -2,33 +2,27 @@ package analyser
 
 import (
 	"fmt"
-	"os"
-
 	"fscans/pkg"
-	"sync"
 )
 
 type analyser struct {
 	entities   map[string][]string // hash - filename
-	fileHashes chan *pkg.FileHash
-	errs       chan error
+	fileHashes chan *pkg.FileHash  // fileHashes chan 关闭则分析器退出
 }
 
-func NewAnalyser(fileHashes chan *pkg.FileHash, errs chan error) *analyser {
+func NewAnalyser(fileHashes chan *pkg.FileHash) *analyser {
 	return &analyser{
 		entities:   make(map[string][]string),
 		fileHashes: fileHashes,
-		errs:       errs,
 	}
 }
 
-func (a *analyser) Run(wait *sync.WaitGroup) {
-	defer wait.Done()
-
+// Run 启动分析器，读去文件hash结果，存入map中
+func (a *analyser) Run() {
 	for {
 		select {
-		case fileHash, ok := <-a.fileHashes:
-			if !ok {
+		case fileHash, more := <-a.fileHashes:
+			if !more {
 				return
 			}
 
@@ -38,21 +32,19 @@ func (a *analyser) Run(wait *sync.WaitGroup) {
 				files = []string{fileHash.FileName}
 				a.entities[fileHash.Hash] = files
 			}
-
-		case err := <-a.errs:
-			fmt.Fprintf(os.Stderr, "analyser catch error %v\n", err)
 		}
 	}
 }
 
+// Dump 打印分析结果
 func (a *analyser) Dump() {
 	count := 0
 	for h, fs := range a.entities {
-		fmt.Printf("%s\n", h)
+		fmt.Printf("+ %s\n", h)
 		for _, f := range fs {
-			fmt.Printf("\t %s\n", f)
+			fmt.Printf("- %s\n", f)
 			count++
 		}
 	}
-	fmt.Printf("sum files: %d\n", count)
+	fmt.Printf("\nsum files: %d\n", count)
 }
