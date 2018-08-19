@@ -1,0 +1,2 @@
+# Visual Studio Command Prompt
+cl winlog.cpp

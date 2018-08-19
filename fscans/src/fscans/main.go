@@ -1,28 +1,36 @@
 package main
 
 import (
-	"os"
-	"path/filepath"
-
+	"flag"
 	"fscans/analyser"
 	"fscans/pkg"
 	"fscans/works"
+	"os"
+	"path/filepath"
 	"sync"
 )
 
 func main() {
-	root := "E:\\temp"
+	var root string
+	var maxRoutine int
 
+	flag.StringVar(&root, "path", "", "The path to analyser")
+	flag.IntVar(&maxRoutine, "max-routine", 0, "The max routines to analyser")
+	flag.Parse()
+
+	if len(root) == 0 {
+		flag.Usage()
+		return
+	}
+
+	doAnalyser(root, maxRoutine)
+}
+
+func doAnalyser(root string, maxRoutine int) {
 	ws := make(chan string)
 	fs := make(chan *pkg.FileHash)
-	errs := make(chan error)
 
-	wg := &sync.WaitGroup{}
-	wg.Add(2)
-
-	a := analyser.NewAnalyser(fs, errs)
-	go a.Run(wg)
-
+	// 对目录进行遍历，遇到文件时将全路径写入works chan
 	go func() {
 		filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 			if !info.IsDir() {
@@ -33,11 +41,27 @@ func main() {
 		close(ws)
 	}()
 
-	h := works.NewHashWork(0, ws, fs, errs)
-	h.Run(wg)
+	worksWait := &sync.WaitGroup{}
+	worksWait.Add(1)
+	go func() {
+		defer worksWait.Done()
+		h := works.NewHashWorker(ws, fs, maxRoutine)
+		h.Run()
+	}()
 
+	analyserWait := &sync.WaitGroup{}
+	analyserWait.Add(1)
+	go func() {
+		defer analyserWait.Done()
+		a := analyser.NewAnalyser(fs)
+		a.Run()
+		a.Dump()
+	}()
+
+	// 等待work结束后关闭fs chan，以驱动analyser结束
+	worksWait.Wait()
 	close(fs)
-	wg.Wait()
 
-	a.Dump()
+	// 等待analyser结束
+	analyserWait.Wait()
 }
